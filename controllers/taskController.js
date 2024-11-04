@@ -1,73 +1,130 @@
 const { IncomingForm } = require('formidable');
-const { readTasksFromFile } = require("../utils/fileHandler")
+const { readTasksFromFile, writeTasksToFile } = require("../utils/fileHandler");
 const { copyFileSync } = require('fs');
-exports.getTasks = (req, res)=>{
+const path = require('path');
+
+exports.getTasks = (req, res) => {
     const tasks = readTasksFromFile();
-    res.writeHead(200,  {'content-type':'application/json'})
+    res.writeHead(200, { 'content-type': 'application/json'})
     res.end(JSON.stringify(tasks))
 }
 
-exports.createTask = (req, res)=>{
-    const form = new IncomingForm ();
+exports.createTask = (req, res) => {
+    const form = new IncomingForm();
     form.parse(req, (err, fields, files) => {
-        if (err) {
-            res.writeHead(400, {'content-type':'application/json'});
+        if(err) {
+            res.writeHead(400, { 'content-type': 'application/json'});
             res.end(JSON.stringify({
-            message:'Error Passing Form'
-        })) 
+                message: 'Error parsing form'
+            }))
+            return;
         }
+
+        if (!fields.title) {
+            res.writeHead(400, { 'content-type': 'application/json'});
+            res.end(JSON.stringify({
+                message: 'Title is required'
+            }))
+            return;
+        }
+
+        const image = files.image ? files.image[0] : null;
+
         const tasks = readTasksFromFile()
+
         const newTask = {
             id: Date.now(),
-            title: fields.title[0],
+            title: fields.title,
             description: fields?.description || '',
-            status: fields?.status || 'Pending',
-            image: fields.image ? `/uploads/${files.image.name}`: null ,
+            status: fields?.status || 'pending',
+            image: image ? `/uploads/${image.originalFilename}` : null,
         }
 
-        tasks.push(newTask)
-        writeTasksToFile(tasks)
+        tasks.push(newTask);
 
-        if (files.image) {
-            copyFileSync(files.image.path, path.join(__dirname, '../uploads', files.image.name));
-            res.end(JSON.stringify(newTask))
+        writeTasksToFile(tasks);
+
+        if(image) {
+            copyFileSync(image.filepath, path.join(__dirname, '../uploads', image.originalFilename));
         }
-        
-})
+
+        res.writeHead(200, { 'content-type': 'application/json'});
+        res.end(JSON.stringify(newTask))
+    })
 }
 
-exports.updateTask = (req, res)=>{
-    // const form = new IncomingForm ();
-    // form.parse(req, (err, fields, files) => {
-    //     if (err) {
-    //         res.writeHead(400, {'content-type':'application/json'});
-    //         res.end(JSON.stringify({
-    //         message:'Error Passing Form'
-    //     })) 
-    //     }
-    //     const tasks = readTasksFromFile()
-    //     const taskIndex = tasks.findIndex(task=> task.id == req.params.id)
-    res.end(JSON.stringify({
-        message: 'Task Updated Successfully'
-    }))
+exports.updateTask = (req, res) => {
+    const form = new IncomingForm();
+    form.parse(req, (err, fields, files) => {
+        if(err) {
+            res.writeHead(400, { 'content-type': 'application/json'});
+            res.end(JSON.stringify({
+                message: 'Error parsing form'
+            }))
+            return;
+        }
+
+        if (!fields.title) {
+            res.writeHead(400, { 'content-type': 'application/json'});
+            res.end(JSON.stringify({
+                message: 'Title is required'
+            }))
+            return;
+        }
+
+        const image = files.image ? files.image[0] : null;
+
+        const tasks = readTasksFromFile()
+
+        const taskId = parseInt(req.url.split('/').pop());
+        const taskIndex = tasks.findIndex(task => task.id === taskId);
+
+        if (taskIndex === -1) {
+            res.writeHead(404, { 'content-type': 'application/json'});
+            res.end(JSON.stringify({
+                message: 'Task not found'
+            }))
+            return;
+        }
+
+        const updatedTask = {
+            ...tasks[taskIndex],
+            title: fields.title || tasks[taskIndex].title,
+            description: fields.description || tasks[taskIndex].description,
+            status: fields.status || tasks[taskIndex].status,
+            image: image ? `/uploads/${image.originalFilename}` : tasks[taskIndex].image,
+        }
+
+        tasks[taskIndex] = updatedTask;
+
+        writeTasksToFile(tasks);
+
+        if(image) {
+            copyFileSync(image.filepath, path.join(__dirname, '../uploads', image.originalFilename));
+        }
+
+        res.writeHead(200, { 'content-type': 'application/json'});
+        res.end(JSON.stringify(updatedTask))
+    })
 }
 
-exports.deleteTask = (req, res)=>{
-    // const tasks = readTasksFromFile()
-    // const taskIndex = tasks.findIndex(task=> task.id == req.params.id)
-    // if(taskIndex > -1){
-    //     tasks.splice(taskIndex, 1)
-    //     writeTasksToFile(tasks)
-    //     res.end(JSON.stringify({
-    //         message: 'Task Deleted Successfully'
-    //     }))
-    // } else {
-    //     res.writeHead(404, {'content-type':'application/json'});
-    //     res.end(JSON.stringify({
-    //         message:'Task not found'
-    //     }))
-    // }
+exports.deleteTask = (req, res) => {
+    const tasks = readTasksFromFile();
+    const taskId = parseInt(req.url.split('/').pop());
+    const taskIndex = tasks.findIndex(task => task.id === taskId);
+
+    if (taskIndex === -1) {
+        res.writeHead(404, { 'content-type': 'application/json'});
+        res.end(JSON.stringify({
+            message: 'Task not found'
+        }))
+        return;
+    }
+
+    const updatedTasks = tasks.filter(task => task.id !== taskId);
+    writeTasksToFile(updatedTasks);
+    res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({
-        message: 'Task Updated Successfully'
-    }))
+        message: 'Task successfully deleted'
+    }));
 }
