@@ -1,3 +1,5 @@
+const { getTasks } = require("../controllers/taskController");
+
 const taskRoutes = (req,res)=>{
     if (req.method == 'GET') {
         getTasks(req, res);
