@@ -16,6 +16,6 @@ exports.readTasksFromFile = () => {
     if (!fs.existsSync(filePath)) {
         this.writeTasksToFile([]);
     }
-        exports.writeTasksToFile(filePath);
+        const data =fs.readFileSync(filePath)
         return JSON.parse(data) ;
-    };
+};
